@@ -1,121 +1,658 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Calculator, TrendingUp, DollarSign, Target, ChevronDown } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import {
+  getForexPrice,
+  calculatePips,
+  calculateLotSize,
+  calculatePnL,
+  SUPPORTED_PAIRS,
+  PipCalculatorResult,
+  LotSizeResult,
+  PnLResult,
+} from '../../lib/forex';
 
-const currencyRates = {
-    USD: 1,
-    INR: 83.2,
-    EUR: 0.93,
-    GBP: 0.79,
-    JPY: 157.4,
-};
+type CalculatorTab = 'pip' | 'lot' | 'pnl';
 
-const CalculatorScreen = () => {
-    const { colors, fontSizes } = useTheme();
-    const [amount, setAmount] = useState('');
-    const [conversionResult, setConversionResult] = useState('');
-    const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'INR' | 'EUR' | 'GBP' | 'JPY'>('INR');
+export default function CalculatorScreen() {
+  const { colors, fontSizes } = useTheme();
+  const [activeTab, setActiveTab] = useState<CalculatorTab>('pip');
+  const [selectedPair, setSelectedPair] = useState('XAU/USD');
+  const [showPairPicker, setShowPairPicker] = useState(false);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
 
-    const handleCalculate = () => {
-        const parsedAmount = parseFloat(amount);
-        if (!isNaN(parsedAmount)) {
-            const converted = parsedAmount * currencyRates[selectedCurrency];
-            setConversionResult(`${converted.toFixed(2)} ${selectedCurrency}`);
-        } else {
-            setConversionResult('Invalid input');
-        }
-    };
+  // Pip Calculator State
+  const [pipData, setPipData] = useState({
+    entryPrice: '',
+    exitPrice: '',
+    type: 'BUY' as 'BUY' | 'SELL',
+  });
+  const [pipResult, setPipResult] = useState<PipCalculatorResult | null>(null);
 
-    return (
-        <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
-            <Text style={[styles.title, { color: colors.text }]}>Currency Calculator</Text>
+  // Lot Size Calculator State
+  const [lotData, setLotData] = useState({
+    accountBalance: '',
+    riskPercent: '',
+    stopLossPips: '',
+  });
+  const [lotResult, setLotResult] = useState<LotSizeResult | null>(null);
 
-            <TextInput
-                style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
-                placeholder="Enter amount in USD"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="numeric"
-                value={amount}
-                onChangeText={setAmount}
-            />
+  // PnL Calculator State
+  const [pnlData, setPnlData] = useState({
+    lotSize: '',
+    entryPrice: '',
+    exitPrice: '',
+    type: 'BUY' as 'BUY' | 'SELL',
+  });
+  const [pnlResult, setPnlResult] = useState<PnLResult | null>(null);
 
-            <View style={styles.currencyRow}>
-                {Object.keys(currencyRates).map((cur) => (
-                    <TouchableOpacity
-                        key={cur}
-                        onPress={() => setSelectedCurrency(cur as any)}
-                        style={[styles.currencyButton, selectedCurrency === cur && { backgroundColor: colors.primary }]}
-                    >
-                        <Text
-                            style={{
-                                color: selectedCurrency === cur ? colors.background : colors.textSecondary,
-                                fontWeight: '600',
-                            }}
-                        >
-                            {cur}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+  // Fetch live price when pair changes
+  useEffect(() => {
+    fetchLivePrice();
+  }, [selectedPair]);
 
-            <TouchableOpacity
-                style={[styles.calculateButton, { backgroundColor: colors.primary }]}
-                onPress={handleCalculate}
-            >
-                <Text style={{ color: colors.background, fontWeight: 'bold' }}>Calculate</Text>
-            </TouchableOpacity>
+  const fetchLivePrice = async () => {
+    setLoading(true);
+    try {
+      const price = await getForexPrice(selectedPair);
+      setLivePrice(price);
+    } catch (error) {
+      console.error('Error fetching live price:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            {conversionResult !== '' && (
-                <Text style={[styles.resultText, { color: colors.text }]}>{conversionResult}</Text>
-            )}
-        </ScrollView>
-    );
-};
+  const calculatePipValue = () => {
+    const entry = parseFloat(pipData.entryPrice);
+    const exit = parseFloat(pipData.exitPrice);
 
-const styles = StyleSheet.create({
+    if (isNaN(entry) || isNaN(exit)) {
+      Alert.alert('Error', 'Please enter valid prices');
+      return;
+    }
+
+    const result = calculatePips(selectedPair, entry, exit, pipData.type);
+    setPipResult(result);
+  };
+
+  const calculateLotSizeValue = () => {
+    const balance = parseFloat(lotData.accountBalance);
+    const risk = parseFloat(lotData.riskPercent);
+    const stopLoss = parseFloat(lotData.stopLossPips);
+
+    if (isNaN(balance) || isNaN(risk) || isNaN(stopLoss)) {
+      Alert.alert('Error', 'Please enter valid values');
+      return;
+    }
+
+    // Use standard pip value for calculation
+    const pipValue = selectedPair.includes('JPY') ? 10 : 10;
+    const result = calculateLotSize(balance, risk, stopLoss, pipValue);
+    setLotResult(result);
+  };
+
+  const calculatePnLValue = () => {
+    const lotSize = parseFloat(pnlData.lotSize);
+    const entry = parseFloat(pnlData.entryPrice);
+    const exit = parseFloat(pnlData.exitPrice);
+
+    if (isNaN(lotSize) || isNaN(entry) || isNaN(exit)) {
+      Alert.alert('Error', 'Please enter valid values');
+      return;
+    }
+
+    const result = calculatePnL(selectedPair, lotSize, entry, exit, pnlData.type);
+    setPnlResult(result);
+  };
+
+  const tabs = [
+    { id: 'pip' as CalculatorTab, title: 'Pip Calculator', icon: Target },
+    { id: 'lot' as CalculatorTab, title: 'Lot Size', icon: Calculator },
+    { id: 'pnl' as CalculatorTab, title: 'P&L Calculator', icon: TrendingUp },
+  ];
+
+  const styles = StyleSheet.create({
     container: {
-        padding: 20,
-        flexGrow: 1,
-        justifyContent: 'center',
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingVertical: 16,
     },
     title: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        marginBottom: 20,
-        textAlign: 'center',
+      fontSize: fontSizes.title + 4,
+      fontWeight: 'bold',
+      color: colors.text,
+      fontFamily: 'Inter-Bold',
+      marginBottom: 16,
+    },
+    pairSelector: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 16,
+    },
+    pairText: {
+      flex: 1,
+      fontSize: fontSizes.medium,
+      fontWeight: '600',
+      color: colors.text,
+      fontFamily: 'Inter-SemiBold',
+    },
+    livePrice: {
+      fontSize: fontSizes.medium,
+      color: colors.primary,
+      fontFamily: 'Inter-Medium',
+      marginRight: 8,
+    },
+    tabContainer: {
+      flexDirection: 'row',
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 4,
+      marginHorizontal: 20,
+      marginBottom: 20,
+    },
+    tab: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      borderRadius: 8,
+      gap: 6,
+    },
+    tabActive: {
+      backgroundColor: colors.primary,
+    },
+    tabText: {
+      fontSize: fontSizes.small,
+      color: colors.textSecondary,
+      fontFamily: 'Inter-Medium',
+      textAlign: 'center',
+    },
+    tabTextActive: {
+      color: colors.background,
+    },
+    content: {
+      flex: 1,
+      paddingHorizontal: 20,
+    },
+    calculatorCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 20,
+    },
+    inputGroup: {
+      marginBottom: 16,
+    },
+    label: {
+      fontSize: fontSizes.medium,
+      fontWeight: '600',
+      color: colors.text,
+      fontFamily: 'Inter-SemiBold',
+      marginBottom: 8,
     },
     input: {
-        borderWidth: 1,
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 16,
-        marginBottom: 20,
+      backgroundColor: colors.background,
+      borderRadius: 8,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      fontSize: fontSizes.medium,
+      color: colors.text,
+      fontFamily: 'Inter-Regular',
     },
-    currencyRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        gap: 10,
-        marginBottom: 20,
+    typeSelector: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 16,
     },
-    currencyButton: {
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: '#ccc',
+    typeButton: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+    },
+    typeButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    typeButtonText: {
+      fontSize: fontSizes.medium,
+      color: colors.textSecondary,
+      fontFamily: 'Inter-Medium',
+    },
+    typeButtonTextActive: {
+      color: colors.background,
     },
     calculateButton: {
-        paddingVertical: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginBottom: 20,
+      backgroundColor: colors.primary,
+      borderRadius: 8,
+      paddingVertical: 12,
+      alignItems: 'center',
+      marginTop: 8,
     },
-    resultText: {
-        fontSize: 20,
-        textAlign: 'center',
+    calculateButtonText: {
+      fontSize: fontSizes.medium,
+      fontWeight: 'bold',
+      color: colors.background,
+      fontFamily: 'Inter-Bold',
     },
-});
+    resultCard: {
+      backgroundColor: `${colors.primary}10`,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: `${colors.primary}30`,
+    },
+    resultTitle: {
+      fontSize: fontSizes.medium,
+      fontWeight: 'bold',
+      color: colors.primary,
+      fontFamily: 'Inter-Bold',
+      marginBottom: 12,
+    },
+    resultRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    resultLabel: {
+      fontSize: fontSizes.medium,
+      color: colors.text,
+      fontFamily: 'Inter-Regular',
+    },
+    resultValue: {
+      fontSize: fontSizes.medium,
+      fontWeight: '600',
+      color: colors.text,
+      fontFamily: 'Inter-SemiBold',
+    },
+    modal: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: colors.background,
+      borderRadius: 16,
+      width: '90%',
+      maxHeight: '70%',
+      overflow: 'hidden',
+    },
+    modalHeader: {
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: fontSizes.subtitle,
+      fontWeight: 'bold',
+      color: colors.text,
+      fontFamily: 'Inter-Bold',
+      textAlign: 'center',
+    },
+    pairOption: {
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    pairOptionText: {
+      fontSize: fontSizes.medium,
+      color: colors.text,
+      fontFamily: 'Inter-Regular',
+    },
+  });
 
-export default CalculatorScreen;
+  const renderPipCalculator = () => (
+    <View style={styles.calculatorCard}>
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Trade Type</Text>
+        <View style={styles.typeSelector}>
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              pipData.type === 'BUY' && styles.typeButtonActive,
+            ]}
+            onPress={() => setPipData(prev => ({ ...prev, type: 'BUY' }))}
+          >
+            <Text style={[
+              styles.typeButtonText,
+              pipData.type === 'BUY' && styles.typeButtonTextActive,
+            ]}>
+              BUY
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              pipData.type === 'SELL' && styles.typeButtonActive,
+            ]}
+            onPress={() => setPipData(prev => ({ ...prev, type: 'SELL' }))}
+          >
+            <Text style={[
+              styles.typeButtonText,
+              pipData.type === 'SELL' && styles.typeButtonTextActive,
+            ]}>
+              SELL
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Entry Price</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter entry price"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={pipData.entryPrice}
+          onChangeText={(text) => setPipData(prev => ({ ...prev, entryPrice: text }))}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Exit Price</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter exit price"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={pipData.exitPrice}
+          onChangeText={(text) => setPipData(prev => ({ ...prev, exitPrice: text }))}
+        />
+      </View>
+
+      <TouchableOpacity style={styles.calculateButton} onPress={calculatePipValue}>
+        <Text style={styles.calculateButtonText}>Calculate Pips</Text>
+      </TouchableOpacity>
+
+      {pipResult && (
+        <View style={styles.resultCard}>
+          <Text style={styles.resultTitle}>Pip Calculation Result</Text>
+          <View style={styles.resultRow}>
+            <Text style={styles.resultLabel}>Total Pips:</Text>
+            <Text style={styles.resultValue}>{pipResult.totalPips}</Text>
+          </View>
+          <View style={styles.resultRow}>
+            <Text style={styles.resultLabel}>Pip Value:</Text>
+            <Text style={styles.resultValue}>{pipResult.pipValue}</Text>
+          </View>
+          <View style={styles.resultRow}>
+            <Text style={styles.resultLabel}>Price Difference:</Text>
+            <Text style={styles.resultValue}>${pipResult.profit.toFixed(4)}</Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderLotSizeCalculator = () => (
+    <View style={styles.calculatorCard}>
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Account Balance ($)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter account balance"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={lotData.accountBalance}
+          onChangeText={(text) => setLotData(prev => ({ ...prev, accountBalance: text }))}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Risk Percentage (%)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter risk percentage"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={lotData.riskPercent}
+          onChangeText={(text) => setLotData(prev => ({ ...prev, riskPercent: text }))}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Stop Loss (Pips)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter stop loss in pips"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={lotData.stopLossPips}
+          onChangeText={(text) => setLotData(prev => ({ ...prev, stopLossPips: text }))}
+        />
+      </View>
+
+      <TouchableOpacity style={styles.calculateButton} onPress={calculateLotSizeValue}>
+        <Text style={styles.calculateButtonText}>Calculate Lot Size</Text>
+      </TouchableOpacity>
+
+      {lotResult && (
+        <View style={styles.resultCard}>
+          <Text style={styles.resultTitle}>Lot Size Calculation</Text>
+          <View style={styles.resultRow}>
+            <Text style={styles.resultLabel}>Recommended Lot Size:</Text>
+            <Text style={styles.resultValue}>{lotResult.lotSize}</Text>
+          </View>
+          <View style={styles.resultRow}>
+            <Text style={styles.resultLabel}>Position Size:</Text>
+            <Text style={styles.resultValue}>{lotResult.positionSize.toLocaleString()}</Text>
+          </View>
+          <View style={styles.resultRow}>
+            <Text style={styles.resultLabel}>Risk Amount:</Text>
+            <Text style={styles.resultValue}>${lotResult.margin.toFixed(2)}</Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderPnLCalculator = () => (
+    <View style={styles.calculatorCard}>
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Trade Type</Text>
+        <View style={styles.typeSelector}>
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              pnlData.type === 'BUY' && styles.typeButtonActive,
+            ]}
+            onPress={() => setPnlData(prev => ({ ...prev, type: 'BUY' }))}
+          >
+            <Text style={[
+              styles.typeButtonText,
+              pnlData.type === 'BUY' && styles.typeButtonTextActive,
+            ]}>
+              BUY
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              pnlData.type === 'SELL' && styles.typeButtonActive,
+            ]}
+            onPress={() => setPnlData(prev => ({ ...prev, type: 'SELL' }))}
+          >
+            <Text style={[
+              styles.typeButtonText,
+              pnlData.type === 'SELL' && styles.typeButtonTextActive,
+            ]}>
+              SELL
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Lot Size</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter lot size"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={pnlData.lotSize}
+          onChangeText={(text) => setPnlData(prev => ({ ...prev, lotSize: text }))}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Entry Price</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter entry price"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={pnlData.entryPrice}
+          onChangeText={(text) => setPnlData(prev => ({ ...prev, entryPrice: text }))}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Exit Price</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter exit price"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="numeric"
+          value={pnlData.exitPrice}
+          onChangeText={(text) => setPnlData(prev => ({ ...prev, exitPrice: text }))}
+        />
+      </View>
+
+      <TouchableOpacity style={styles.calculateButton} onPress={calculatePnLValue}>
+        <Text style={styles.calculateButtonText}>Calculate P&L</Text>
+      </TouchableOpacity>
+
+      {pnlResult && (
+        <View style={styles.resultCard}>
+          <Text style={styles.resultTitle}>P&L Calculation Result</Text>
+          <View style={styles.resultRow}>
+            <Text style={styles.resultLabel}>Profit/Loss:</Text>
+            <Text style={[
+              styles.resultValue,
+              { color: pnlResult.profit >= 0 ? colors.success : colors.error }
+            ]}>
+              ${pnlResult.profit}
+            </Text>
+          </View>
+          <View style={styles.resultRow}>
+            <Text style={styles.resultLabel}>Profit %:</Text>
+            <Text style={[
+              styles.resultValue,
+              { color: pnlResult.profitPercent >= 0 ? colors.success : colors.error }
+            ]}>
+              {pnlResult.profitPercent}%
+            </Text>
+          </View>
+          <View style={styles.resultRow}>
+            <Text style={styles.resultLabel}>Pips:</Text>
+            <Text style={styles.resultValue}>{pnlResult.pips}</Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Trading Calculators</Text>
+        
+        <TouchableOpacity
+          style={styles.pairSelector}
+          onPress={() => setShowPairPicker(true)}
+        >
+          <Text style={styles.pairText}>{selectedPair}</Text>
+          {livePrice && (
+            <Text style={styles.livePrice}>
+              {loading ? 'Loading...' : `$${livePrice.toFixed(selectedPair.includes('JPY') ? 2 : 4)}`}
+            </Text>
+          )}
+          <ChevronDown size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.tabContainer}>
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[styles.tab, activeTab === tab.id && styles.tabActive]}
+            onPress={() => setActiveTab(tab.id)}
+          >
+            <tab.icon
+              size={16}
+              color={activeTab === tab.id ? colors.background : colors.textSecondary}
+            />
+            <Text style={[
+              styles.tabText,
+              activeTab === tab.id && styles.tabTextActive,
+            ]}>
+              {tab.title}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {activeTab === 'pip' && renderPipCalculator()}
+        {activeTab === 'lot' && renderLotSizeCalculator()}
+        {activeTab === 'pnl' && renderPnLCalculator()}
+      </ScrollView>
+
+      {/* Pair Picker Modal */}
+      {showPairPicker && (
+        <View style={styles.modal}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Trading Pair</Text>
+            </View>
+            <ScrollView>
+              {SUPPORTED_PAIRS.map((pair) => (
+                <TouchableOpacity
+                  key={pair}
+                  style={styles.pairOption}
+                  onPress={() => {
+                    setSelectedPair(pair);
+                    setShowPairPicker(false);
+                  }}
+                >
+                  <Text style={styles.pairOptionText}>{pair}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+    </SafeAreaView>
+  );
+}

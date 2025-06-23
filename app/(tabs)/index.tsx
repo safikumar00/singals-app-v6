@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import { TrendingUp, TrendingDown, Settings2, Bell } from 'lucide-react-native';
+import { TrendingUp, TrendingDown, Settings2, Bell, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import AssetSwitcher from '../../components/AssetSwitcher';
 import TimeframeSwitcher from '../../components/TimeframeSwitcher';
@@ -19,6 +19,7 @@ import SetupGuide from '@/components/SetupGuide';
 import ConnectionStatus from '@/components/ConnectionStatus';
 import MarketOverview from '@/components/MarketOverview';
 import { fetchMarketData, fetchTechnicalIndicators, fetchEconomicEvents, MarketData, TechnicalIndicator, EconomicEvent } from '../../lib/database';
+import { getForexPrice } from '../../lib/forex';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -31,9 +32,12 @@ export default function HomeScreen() {
   const [marketData, setMarketData] = useState<MarketData[]>([]);
   const [technicalIndicators, setTechnicalIndicators] = useState<TechnicalIndicator[]>([]);
   const [economicEvents, setEconomicEvents] = useState<EconomicEvent[]>([]);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
 
   useEffect(() => {
     loadData();
+    fetchLivePrice();
   }, [selectedAsset]);
 
   const loadData = async () => {
@@ -52,14 +56,31 @@ export default function HomeScreen() {
     }
   };
 
+  const fetchLivePrice = async () => {
+    setPriceLoading(true);
+    try {
+      const price = await getForexPrice(selectedAsset);
+      setLivePrice(price);
+    } catch (error) {
+      console.error('Error fetching live price:', error);
+    } finally {
+      setPriceLoading(false);
+    }
+  };
+
   const currentData = marketData.find(item => item.pair === selectedAsset) || {
-    price: selectedAsset === 'XAU/USD' ? 2345.67 : 29.45,
+    price: livePrice || (selectedAsset === 'XAU/USD' ? 2345.67 : 29.45),
     change: selectedAsset === 'XAU/USD' ? 12.34 : -0.23,
     change_percent: selectedAsset === 'XAU/USD' ? 0.53 : -0.77,
     high: selectedAsset === 'XAU/USD' ? 2356.89 : 29.78,
     low: selectedAsset === 'XAU/USD' ? 2334.12 : 29.12,
     volume: selectedAsset === 'XAU/USD' ? '2.4M' : '1.8M',
   };
+
+  // Use live price if available
+  if (livePrice) {
+    currentData.price = livePrice;
+  }
 
   const getTradingViewHTML = (symbol: string) => `
     <html>
@@ -110,6 +131,65 @@ export default function HomeScreen() {
       borderWidth: 1,
       borderColor: colors.border,
     },
+    livePriceCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 20,
+      marginHorizontal: 20,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    livePriceHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    pairTitle: {
+      fontSize: fontSizes.subtitle,
+      fontWeight: 'bold',
+      color: colors.text,
+      fontFamily: 'Inter-Bold',
+    },
+    refreshButton: {
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: colors.background,
+    },
+    changeContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    livePriceValue: {
+      fontSize: 32,
+      fontWeight: 'bold',
+      color: colors.text,
+      fontFamily: 'Inter-Bold',
+      marginBottom: 12,
+    },
+    priceLoading: {
+      color: colors.textSecondary,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 12,
+    },
+    statItem: {
+      alignItems: 'center',
+    },
+    statLabel: {
+      fontSize: fontSizes.small,
+      color: colors.textSecondary,
+      fontFamily: 'Inter-Regular',
+    },
+    statValue: {
+      fontSize: fontSizes.medium,
+      color: colors.text,
+      fontFamily: 'Inter-Medium',
+    },
   });
 
   return (
@@ -141,18 +221,22 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <AssetSwitcher selectedAsset={selectedAsset} onAssetChange={setSelectedAsset} />
 
-        <View style={{
-          backgroundColor: colors.surface,
-          borderRadius: 16,
-          padding: 20,
-          marginHorizontal: 20,
-          marginBottom: 20,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Text style={{ fontSize: fontSizes.subtitle, fontWeight: 'bold', color: colors.text }}> {selectedAsset} </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        {/* Live Price Card with Refresh */}
+        <View style={styles.livePriceCard}>
+          <View style={styles.livePriceHeader}>
+            <Text style={styles.pairTitle}>{selectedAsset}</Text>
+            <View style={styles.changeContainer}>
+              <TouchableOpacity
+                style={styles.refreshButton}
+                onPress={fetchLivePrice}
+                disabled={priceLoading}
+              >
+                <RefreshCw 
+                  size={16} 
+                  color={colors.textSecondary}
+                  style={{ opacity: priceLoading ? 0.5 : 1 }}
+                />
+              </TouchableOpacity>
               {currentData.change >= 0 ? (
                 <TrendingUp size={16} color={colors.success} />
               ) : (
@@ -163,19 +247,26 @@ export default function HomeScreen() {
               </Text>
             </View>
           </View>
-          <Text style={{ fontSize: 32, fontWeight: 'bold', color: colors.text }}>{currentData.price.toFixed(2)}</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: fontSizes.small, color: colors.textSecondary }}>High</Text>
-              <Text style={{ fontSize: fontSizes.medium, color: colors.text }}>{currentData.high.toFixed(2)}</Text>
+          
+          <Text style={[
+            styles.livePriceValue,
+            priceLoading && styles.priceLoading
+          ]}>
+            {priceLoading ? 'Loading...' : `$${currentData.price.toFixed(2)}`}
+          </Text>
+          
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>High</Text>
+              <Text style={styles.statValue}>${currentData.high.toFixed(2)}</Text>
             </View>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: fontSizes.small, color: colors.textSecondary }}>Low</Text>
-              <Text style={{ fontSize: fontSizes.medium, color: colors.text }}>{currentData.low.toFixed(2)}</Text>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Low</Text>
+              <Text style={styles.statValue}>${currentData.low.toFixed(2)}</Text>
             </View>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: fontSizes.small, color: colors.textSecondary }}>Volume</Text>
-              <Text style={{ fontSize: fontSizes.medium, color: colors.text }}>{currentData.volume}</Text>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Volume</Text>
+              <Text style={styles.statValue}>{currentData.volume}</Text>
             </View>
           </View>
         </View>

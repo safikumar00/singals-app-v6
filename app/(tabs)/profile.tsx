@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Alert,
   Share,
   Pressable,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -26,15 +26,26 @@ import {
   Share2,
   Moon,
   Sun,
-  Type
+  Type,
+  Globe,
+  Calendar,
+  Edit3,
+  Check,
+  X,
 } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import NotificationTestPanel from '../../components/NotificationTestPanel';
+import { getUserProfile, updateUserProfile, UserProfile } from '../../lib/userProfile';
+import { LANGUAGES } from '../../lib/forex';
 
 export default function ProfileScreen() {
   const { colors, fontSizes, theme, setTheme, fontSize, setFontSize } = useTheme();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showNotificationTests, setShowNotificationTests] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editData, setEditData] = useState({ name: '', dob: '', language: '' });
 
   const userStats = {
     memberSince: 'January 2024',
@@ -45,11 +56,68 @@ export default function ProfileScreen() {
     level: 4,
   };
 
+  useEffect(() => {
+    loadUserProfile();
+  }, []);
+
+  const loadUserProfile = async () => {
+    try {
+      const profile = await getUserProfile();
+      setUserProfile(profile);
+      if (profile) {
+        setEditData({
+          name: profile.name || '',
+          dob: profile.dob || '',
+          language: profile.language || 'en',
+        });
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!editData.name.trim()) {
+      Alert.alert('Error', 'Name is required');
+      return;
+    }
+
+    try {
+      const success = await updateUserProfile({
+        name: editData.name,
+        dob: editData.dob,
+        language: editData.language,
+      });
+
+      if (success) {
+        await loadUserProfile();
+        setShowEditProfile(false);
+        Alert.alert('Success', 'Profile updated successfully');
+      } else {
+        Alert.alert('Error', 'Failed to update profile');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Something went wrong');
+    }
+  };
+
+  const handleLanguageUpdate = async (languageCode: string) => {
+    try {
+      const success = await updateUserProfile({ language: languageCode });
+      if (success) {
+        await loadUserProfile();
+        setShowLanguagePicker(false);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update language');
+    }
+  };
+
   const handleShare = async () => {
     try {
       await Share.share({
         message: 'Check out this amazing Gold & Silver trading signals app! Get real-time trading opportunities and boost your portfolio.',
-        url: 'https://your-app-url.com', // Replace with actual app URL
+        url: 'https://your-app-url.com',
       });
     } catch (error) {
       console.log('Error sharing:', error);
@@ -122,6 +190,8 @@ export default function ProfileScreen() {
     </View>
   );
 
+  const selectedLanguage = LANGUAGES.find(lang => lang.code === userProfile?.language);
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -189,6 +259,21 @@ export default function ProfileScreen() {
       color: colors.textSecondary,
       fontFamily: 'Inter-Regular',
     },
+    editButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      marginTop: 12,
+      gap: 6,
+    },
+    editButtonText: {
+      fontSize: fontSizes.small,
+      color: colors.primary,
+      fontFamily: 'Inter-Medium',
+    },
     statsContainer: {
       flexDirection: 'row',
       gap: 12,
@@ -247,6 +332,11 @@ export default function ProfileScreen() {
       fontSize: fontSizes.medium,
       color: colors.text,
       fontFamily: 'Inter-Medium',
+    },
+    settingValue: {
+      fontSize: fontSizes.medium,
+      color: colors.textSecondary,
+      fontFamily: 'Inter-Regular',
     },
     themeButtons: {
       flexDirection: 'row',
@@ -375,52 +465,170 @@ export default function ProfileScreen() {
       color: colors.secondary,
       fontFamily: 'Inter-SemiBold',
     },
+    modal: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: colors.background,
+      borderRadius: 16,
+      width: '90%',
+      maxHeight: '70%',
+      overflow: 'hidden',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: fontSizes.subtitle,
+      fontWeight: 'bold',
+      color: colors.text,
+      fontFamily: 'Inter-Bold',
+    },
+    closeButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    languageOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    languageFlag: {
+      fontSize: 20,
+      marginRight: 12,
+    },
+    languageName: {
+      flex: 1,
+      fontSize: fontSizes.medium,
+      color: colors.text,
+      fontFamily: 'Inter-Regular',
+    },
+    languageSelected: {
+      backgroundColor: `${colors.primary}10`,
+    },
+    editForm: {
+      padding: 20,
+      gap: 16,
+    },
+    inputGroup: {
+      gap: 8,
+    },
+    label: {
+      fontSize: fontSizes.medium,
+      fontWeight: '600',
+      color: colors.text,
+      fontFamily: 'Inter-SemiBold',
+    },
+    input: {
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      fontSize: fontSizes.medium,
+      color: colors.text,
+      fontFamily: 'Inter-Regular',
+    },
+    buttonRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 16,
+    },
+    button: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    primaryButton: {
+      backgroundColor: colors.primary,
+    },
+    secondaryButton: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    buttonText: {
+      fontSize: fontSizes.medium,
+      fontWeight: '600',
+      fontFamily: 'Inter-SemiBold',
+    },
+    primaryButtonText: {
+      color: colors.background,
+    },
+    secondaryButtonText: {
+      color: colors.text,
+    },
   });
 
   return (
     <SafeAreaView style={styles.container}>
-      {Platform.OS === 'web' ? (
-        <ScrollView style={{ padding: 20 }}>
-          {/* Profile Header */}
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <User size={40} color={colors.text} />
-              </View>
-              <View style={styles.levelBadge}>
-                <Text style={styles.levelText}>{userStats.level}</Text>
-              </View>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Profile Header */}
+        <View style={styles.profileHeader}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              <User size={40} color={colors.text} />
             </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.userName}>Gold & Silver Trader</Text>
-              <Text style={styles.userRank}>{userStats.rank}</Text>
-              <Text style={styles.memberSince}>Member since {userStats.memberSince}</Text>
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelText}>{userStats.level}</Text>
             </View>
           </View>
-
-          {/* Stats Grid */}
-          <View style={styles.statsContainer}>
-            {renderStat(
-              Award,
-              `$${userStats.totalSignals.toString()}`,
-              'Total Signals',
-              colors.warning
-            )}
-            {renderStat(
-              Target,
-              `${userStats.successRate}%`,
-              'Success Rate',
-              colors.success
-            )}
-            {renderStat(
-              TrendingUp,
-              `$${userStats.totalProfit.toLocaleString()}`,
-              'Total Profit',
-              colors.secondary
-            )}
+          <View style={styles.profileInfo}>
+            <Text style={styles.userName}>
+              {userProfile?.name || 'Gold & Silver Trader'}
+            </Text>
+            <Text style={styles.userRank}>{userStats.rank}</Text>
+            <Text style={styles.memberSince}>Member since {userStats.memberSince}</Text>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => setShowEditProfile(true)}
+            >
+              <Edit3 size={14} color={colors.primary} />
+              <Text style={styles.editButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
           </View>
+        </View>
 
-          {/* Notification Test Panel Toggle */}
+        {/* Stats Grid */}
+        <View style={styles.statsContainer}>
+          {renderStat(
+            Award,
+            userStats.totalSignals.toString(),
+            'Total Signals',
+            colors.warning
+          )}
+          {renderStat(
+            Target,
+            `${userStats.successRate}%`,
+            'Success Rate',
+            colors.success
+          )}
+          {renderStat(
+            TrendingUp,
+            `$${userStats.totalProfit.toLocaleString()}`,
+            'Total Profit',
+            colors.secondary
+          )}
+        </View>
+
+        {/* Notification Test Panel Toggle */}
+        {Platform.OS === 'web' && (
           <TouchableOpacity
             style={styles.testToggle}
             onPress={() => setShowNotificationTests(!showNotificationTests)}
@@ -428,346 +636,250 @@ export default function ProfileScreen() {
             <Text style={styles.testToggleText}>
               {showNotificationTests ? 'Hide' : 'Show'} Notification Tests
             </Text>
-            <Switch
-              value={showNotificationTests}
-              onValueChange={setShowNotificationTests}
-              trackColor={{ false: colors.border, true: colors.secondary }}
-              thumbColor={colors.background}
-            />
           </TouchableOpacity>
+        )}
 
-          {/* Notification Test Panel */}
-          {showNotificationTests && <NotificationTestPanel />}
+        {/* Notification Test Panel */}
+        {showNotificationTests && Platform.OS === 'web' && <NotificationTestPanel />}
 
-          {/* Settings Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Preferences</Text>
+        {/* Settings Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Preferences</Text>
 
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <Bell size={20} color={colors.warning} />
-                <Text style={styles.settingText}>Push Notifications</Text>
-              </View>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor={colors.background}
-              />
-            </View>
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <Moon size={20} color={colors.secondary} />
-                <Text style={styles.settingText}>Theme</Text>
-              </View>
-              <View style={styles.themeButtons}>
-                <Pressable
-                  style={[
-                    styles.themeButton,
-                    theme === 'light' && styles.themeButtonActive
-                  ]}
-                  onPress={() => setTheme('light')}
-                >
-                  <Sun size={14} color={theme === 'light' ? colors.background : colors.textSecondary} />
-                  <Text style={[
-                    styles.themeButtonText,
-                    theme === 'light' && styles.themeButtonTextActive
-                  ]}>
-                    Light
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.themeButton,
-                    theme === 'dark' && styles.themeButtonActive
-                  ]}
-                  onPress={() => setTheme('dark')}
-                >
-                  <Moon size={14} color={theme === 'dark' ? colors.background : colors.textSecondary} />
-                  <Text style={[
-                    styles.themeButtonText,
-                    theme === 'dark' && styles.themeButtonTextActive
-                  ]}>
-                    Dark
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.themeButton,
-                    theme === 'system' && styles.themeButtonActive
-                  ]}
-                  onPress={() => setTheme('system')}
-                >
-                  <Settings size={14} color={theme === 'system' ? colors.background : colors.textSecondary} />
-                  <Text style={[
-                    styles.themeButtonText,
-                    theme === 'system' && styles.themeButtonTextActive
-                  ]}>
-                    Auto
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <Type size={20} color={colors.primary} />
-                <Text style={styles.settingText}>Font Size</Text>
-              </View>
-              <View style={styles.fontSizeButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.fontSizeButton,
-                    fontSize === 'small' && styles.fontSizeButtonActive
-                  ]}
-                  onPress={() => setFontSize('small')}
-                >
-                  <Text style={[
-                    styles.fontSizeButtonText,
-                    fontSize === 'small' && styles.fontSizeButtonTextActive
-                  ]}>
-                    S
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.fontSizeButton,
-                    fontSize === 'medium' && styles.fontSizeButtonActive
-                  ]}
-                  onPress={() => setFontSize('medium')}
-                >
-                  <Text style={[
-                    styles.fontSizeButtonText,
-                    fontSize === 'medium' && styles.fontSizeButtonTextActive
-                  ]}>
-                    M
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.fontSizeButton,
-                    fontSize === 'large' && styles.fontSizeButtonActive
-                  ]}
-                  onPress={() => setFontSize('large')}
-                >
-                  <Text style={[
-                    styles.fontSizeButtonText,
-                    fontSize === 'large' && styles.fontSizeButtonTextActive
-                  ]}>
-                    L
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Menu Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account</Text>
-            <View style={styles.menuContainer}>
-              {menuItems.map(renderMenuItem)}
-            </View>
-          </View>
-
-          {/* App Version */}
-          <Text style={styles.versionText}>Version 1.0.0</Text>
-        </ScrollView>
-      ) : (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Profile Header */}
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <User size={40} color={colors.text} />
-              </View>
-              <View style={styles.levelBadge}>
-                <Text style={styles.levelText}>{userStats.level}</Text>
-              </View>
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.userName}>Gold & Silver Trader</Text>
-              <Text style={styles.userRank}>{userStats.rank}</Text>
-              <Text style={styles.memberSince}>Member since {userStats.memberSince}</Text>
-            </View>
-          </View>
-
-          {/* Stats Grid */}
-          <View style={styles.statsContainer}>
-            {renderStat(
-              Award,
-              userStats.totalSignals.toString(),
-              'Total Signals',
-              colors.warning
-            )}
-            {renderStat(
-              Target,
-              `${userStats.successRate}%`,
-              'Success Rate',
-              colors.success
-            )}
-            {renderStat(
-              TrendingUp,
-              `$${userStats.totalProfit.toLocaleString()}`,
-              'Total Profit',
-              colors.secondary
-            )}
-          </View>
-
-          {/* Notification Test Panel Toggle */}
           <TouchableOpacity
-            style={styles.testToggle}
-            onPress={() => setShowNotificationTests(!showNotificationTests)}
+            style={styles.settingItem}
+            onPress={() => setShowLanguagePicker(true)}
           >
-            <Text style={styles.testToggleText}>
-              {showNotificationTests ? 'Hide' : 'Show'} Notification Tests
+            <View style={styles.settingLeft}>
+              <Globe size={20} color={colors.secondary} />
+              <Text style={styles.settingText}>Language</Text>
+            </View>
+            <Text style={styles.settingValue}>
+              {selectedLanguage?.flag} {selectedLanguage?.name}
             </Text>
-            <Switch
-              value={showNotificationTests}
-              onValueChange={setShowNotificationTests}
-              trackColor={{ false: colors.border, true: colors.secondary }}
-              thumbColor={colors.background}
-            />
           </TouchableOpacity>
 
-          {/* Notification Test Panel */}
-          {showNotificationTests && <NotificationTestPanel />}
-
-          {/* Settings Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Preferences</Text>
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <Bell size={20} color={colors.warning} />
-                <Text style={styles.settingText}>Push Notifications</Text>
-              </View>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor={colors.background}
-              />
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Moon size={20} color={colors.secondary} />
+              <Text style={styles.settingText}>Theme</Text>
             </View>
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <Moon size={20} color={colors.secondary} />
-                <Text style={styles.settingText}>Theme</Text>
-              </View>
-              <View style={styles.themeButtons}>
-                <Pressable
-                  style={[
-                    styles.themeButton,
-                    theme === 'light' && styles.themeButtonActive
-                  ]}
-                  onPress={() => setTheme('light')}
-                >
-                  <Sun size={14} color={theme === 'light' ? colors.background : colors.textSecondary} />
-                  <Text style={[
-                    styles.themeButtonText,
-                    theme === 'light' && styles.themeButtonTextActive
-                  ]}>
-                    Light
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.themeButton,
-                    theme === 'dark' && styles.themeButtonActive
-                  ]}
-                  onPress={() => setTheme('dark')}
-                >
-                  <Moon size={14} color={theme === 'dark' ? colors.background : colors.textSecondary} />
-                  <Text style={[
-                    styles.themeButtonText,
-                    theme === 'dark' && styles.themeButtonTextActive
-                  ]}>
-                    Dark
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.themeButton,
-                    theme === 'system' && styles.themeButtonActive
-                  ]}
-                  onPress={() => setTheme('system')}
-                >
-                  <Settings size={14} color={theme === 'system' ? colors.background : colors.textSecondary} />
-                  <Text style={[
-                    styles.themeButtonText,
-                    theme === 'system' && styles.themeButtonTextActive
-                  ]}>
-                    Auto
-                  </Text>
-                </Pressable>
-              </View>
+            <View style={styles.themeButtons}>
+              <Pressable
+                style={[
+                  styles.themeButton,
+                  theme === 'light' && styles.themeButtonActive
+                ]}
+                onPress={() => setTheme('light')}
+              >
+                <Sun size={14} color={theme === 'light' ? colors.background : colors.textSecondary} />
+                <Text style={[
+                  styles.themeButtonText,
+                  theme === 'light' && styles.themeButtonTextActive
+                ]}>
+                  Light
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.themeButton,
+                  theme === 'dark' && styles.themeButtonActive
+                ]}
+                onPress={() => setTheme('dark')}
+              >
+                <Moon size={14} color={theme === 'dark' ? colors.background : colors.textSecondary} />
+                <Text style={[
+                  styles.themeButtonText,
+                  theme === 'dark' && styles.themeButtonTextActive
+                ]}>
+                  Dark
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.themeButton,
+                  theme === 'system' && styles.themeButtonActive
+                ]}
+                onPress={() => setTheme('system')}
+              >
+                <Settings size={14} color={theme === 'system' ? colors.background : colors.textSecondary} />
+                <Text style={[
+                  styles.themeButtonText,
+                  theme === 'system' && styles.themeButtonTextActive
+                ]}>
+                  Auto
+                </Text>
+              </Pressable>
             </View>
+          </View>
 
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <Type size={20} color={colors.primary} />
-                <Text style={styles.settingText}>Font Size</Text>
-              </View>
-              <View style={styles.fontSizeButtons}>
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Type size={20} color={colors.primary} />
+              <Text style={styles.settingText}>Font Size</Text>
+            </View>
+            <View style={styles.fontSizeButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.fontSizeButton,
+                  fontSize === 'small' && styles.fontSizeButtonActive
+                ]}
+                onPress={() => setFontSize('small')}
+              >
+                <Text style={[
+                  styles.fontSizeButtonText,
+                  fontSize === 'small' && styles.fontSizeButtonTextActive
+                ]}>
+                  S
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.fontSizeButton,
+                  fontSize === 'medium' && styles.fontSizeButtonActive
+                ]}
+                onPress={() => setFontSize('medium')}
+              >
+                <Text style={[
+                  styles.fontSizeButtonText,
+                  fontSize === 'medium' && styles.fontSizeButtonTextActive
+                ]}>
+                  M
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.fontSizeButton,
+                  fontSize === 'large' && styles.fontSizeButtonActive
+                ]}
+                onPress={() => setFontSize('large')}
+              >
+                <Text style={[
+                  styles.fontSizeButtonText,
+                  fontSize === 'large' && styles.fontSizeButtonTextActive
+                ]}>
+                  L
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Menu Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <View style={styles.menuContainer}>
+            {menuItems.map(renderMenuItem)}
+          </View>
+        </View>
+
+        {/* App Version */}
+        <Text style={styles.versionText}>Version 1.0.0</Text>
+      </ScrollView>
+
+      {/* Language Picker Modal */}
+      <Modal
+        visible={showLanguagePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLanguagePicker(false)}
+      >
+        <View style={styles.modal}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Language</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowLanguagePicker(false)}
+              >
+                <X size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {LANGUAGES.map((language) => (
                 <TouchableOpacity
+                  key={language.code}
                   style={[
-                    styles.fontSizeButton,
-                    fontSize === 'small' && styles.fontSizeButtonActive
+                    styles.languageOption,
+                    userProfile?.language === language.code && styles.languageSelected
                   ]}
-                  onPress={() => setFontSize('small')}
+                  onPress={() => handleLanguageUpdate(language.code)}
                 >
-                  <Text style={[
-                    styles.fontSizeButtonText,
-                    fontSize === 'small' && styles.fontSizeButtonTextActive
-                  ]}>
-                    S
+                  <Text style={styles.languageFlag}>{language.flag}</Text>
+                  <Text style={styles.languageName}>{language.name}</Text>
+                  {userProfile?.language === language.code && (
+                    <Check size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={showEditProfile}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEditProfile(false)}
+      >
+        <View style={styles.modal}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowEditProfile(false)}
+              >
+                <X size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.editForm}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Full Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your full name"
+                  placeholderTextColor={colors.textSecondary}
+                  value={editData.name}
+                  onChangeText={(text) => setEditData(prev => ({ ...prev, name: text }))}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Date of Birth</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={colors.textSecondary}
+                  value={editData.dob}
+                  onChangeText={(text) => setEditData(prev => ({ ...prev, dob: text }))}
+                />
+              </View>
+
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.button, styles.secondaryButton]}
+                  onPress={() => setShowEditProfile(false)}
+                >
+                  <Text style={[styles.buttonText, styles.secondaryButtonText]}>
+                    Cancel
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[
-                    styles.fontSizeButton,
-                    fontSize === 'medium' && styles.fontSizeButtonActive
-                  ]}
-                  onPress={() => setFontSize('medium')}
+                  style={[styles.button, styles.primaryButton]}
+                  onPress={handleUpdateProfile}
                 >
-                  <Text style={[
-                    styles.fontSizeButtonText,
-                    fontSize === 'medium' && styles.fontSizeButtonTextActive
-                  ]}>
-                    M
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.fontSizeButton,
-                    fontSize === 'large' && styles.fontSizeButtonActive
-                  ]}
-                  onPress={() => setFontSize('large')}
-                >
-                  <Text style={[
-                    styles.fontSizeButtonText,
-                    fontSize === 'large' && styles.fontSizeButtonTextActive
-                  ]}>
-                    L
+                  <Text style={[styles.buttonText, styles.primaryButtonText]}>
+                    Save
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
-
-          {/* Menu Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account</Text>
-            <View style={styles.menuContainer}>
-              {menuItems.map(renderMenuItem)}
-            </View>
-          </View>
-
-          {/* App Version */}
-          <Text style={styles.versionText}>Version 1.0.0</Text>
-        </ScrollView>
-      )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
