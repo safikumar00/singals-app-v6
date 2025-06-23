@@ -12,27 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  User,
-  Bell,
-  Shield,
-  CircleHelp as HelpCircle,
-  Settings,
-  LogOut,
-  ChevronRight,
-  Award,
-  Target,
-  TrendingUp,
-  Share2,
-  Moon,
-  Sun,
-  Type,
-  Globe,
-  Calendar,
-  Edit3,
-  Check,
-  X,
-} from 'lucide-react-native';
+import { User, Bell, Shield, CircleHelp as HelpCircle, Settings, LogOut, ChevronRight, Award, Target, TrendingUp, Share2, Moon, Sun, Type, Globe, Calendar, CreditCard as Edit3, Check, X } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import NotificationTestPanel from '../../components/NotificationTestPanel';
 import { getUserProfile, updateUserProfile, UserProfile } from '../../lib/userProfile';
