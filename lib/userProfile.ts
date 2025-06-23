@@ -59,7 +59,12 @@ export async function getUserProfile(): Promise<UserProfile | null> {
       .eq('user_id', deviceId)
       .single();
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows returned - this is expected for new users, don't log as error
+        return null;
+      }
+      // Only log unexpected errors
       console.error('Error fetching user profile:', error);
       return null;
     }

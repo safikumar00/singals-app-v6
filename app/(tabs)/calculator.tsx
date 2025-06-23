@@ -69,6 +69,8 @@ export default function CalculatorScreen() {
       setLivePrice(price);
     } catch (error) {
       console.error('Error fetching live price:', error);
+      // Set a fallback price or keep null to indicate unavailable
+      setLivePrice(null);
     } finally {
       setLoading(false);
     }
@@ -83,8 +85,13 @@ export default function CalculatorScreen() {
       return;
     }
 
-    const result = calculatePips(selectedPair, entry, exit, pipData.type);
-    setPipResult(result);
+    try {
+      const result = calculatePips(selectedPair, entry, exit, pipData.type);
+      setPipResult(result);
+    } catch (error) {
+      console.error('Error calculating pips:', error);
+      Alert.alert('Error', 'Failed to calculate pip value');
+    }
   };
 
   const calculateLotSizeValue = () => {
@@ -97,10 +104,15 @@ export default function CalculatorScreen() {
       return;
     }
 
-    // Use standard pip value for calculation
-    const pipValue = selectedPair.includes('JPY') ? 10 : 10;
-    const result = calculateLotSize(balance, risk, stopLoss, pipValue);
-    setLotResult(result);
+    try {
+      // Use standard pip value for calculation
+      const pipValue = selectedPair.includes('JPY') ? 10 : 10;
+      const result = calculateLotSize(balance, risk, stopLoss, pipValue);
+      setLotResult(result);
+    } catch (error) {
+      console.error('Error calculating lot size:', error);
+      Alert.alert('Error', 'Failed to calculate lot size');
+    }
   };
 
   const calculatePnLValue = () => {
@@ -113,8 +125,13 @@ export default function CalculatorScreen() {
       return;
     }
 
-    const result = calculatePnL(selectedPair, lotSize, entry, exit, pnlData.type);
-    setPnlResult(result);
+    try {
+      const result = calculatePnL(selectedPair, lotSize, entry, exit, pnlData.type);
+      setPnlResult(result);
+    } catch (error) {
+      console.error('Error calculating P&L:', error);
+      Alert.alert('Error', 'Failed to calculate P&L');
+    }
   };
 
   const tabs = [
@@ -596,6 +613,11 @@ export default function CalculatorScreen() {
           {livePrice && (
             <Text style={styles.livePrice}>
               {loading ? 'Loading...' : `$${livePrice.toFixed(selectedPair.includes('JPY') ? 2 : 4)}`}
+            </Text>
+          )}
+          {!livePrice && !loading && (
+            <Text style={[styles.livePrice, { color: colors.textSecondary }]}>
+              Price unavailable
             </Text>
           )}
           <ChevronDown size={20} color={colors.textSecondary} />
